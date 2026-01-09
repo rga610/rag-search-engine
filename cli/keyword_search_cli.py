@@ -3,6 +3,7 @@
 import argparse
 import json
 import string
+from nltk.stem import PorterStemmer
 
 
 def preprocess_text(text: str) -> str:
@@ -24,7 +25,18 @@ def search(query: str) -> None:
 
     # Tokenize the query
     query_tokens = preprocessed_query.split()
-    query_tokens = [token for token in query_tokens if token]  # Remove empty querytokens
+
+    # Remove stopwords
+    stopwords_path = "data/stopwords.txt"
+    with open(stopwords_path) as f:
+        stopwords = f.read().splitlines()
+
+    # Remove empty query tokens
+    query_tokens = [ token for token in query_tokens if token not in stopwords ]
+
+    # Stemming
+    stemmer = PorterStemmer()
+    query_tokens = [ stemmer.stem(token) for token in query_tokens ]
 
     # Search for the query in the titles
     results = []
@@ -34,14 +46,16 @@ def search(query: str) -> None:
         # Title text preprocessing
         preprocessed_movie_title = preprocess_text(movie_title)
         title_tokens = preprocessed_movie_title.split()
-        title_tokens = [token for token in title_tokens if token]  # Remove empty title tokens
+        title_tokens = [
+            token for token in title_tokens if token
+        ]  # Remove empty title tokens
 
         # Check if ANY query token appears in ANY title token
         found_match = False
         for query_token in query_tokens:
             for title_token in title_tokens:
                 if query_token in title_token:
-                    found_match = True 
+                    found_match = True
                     break  # Exit inner loop
             if found_match:
                 break  # Exit outer loop
