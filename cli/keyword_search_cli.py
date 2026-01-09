@@ -22,6 +22,10 @@ def search(query: str) -> None:
     original_query = query
     preprocessed_query = preprocess_text(query)
 
+    # Tokenize the query
+    query_tokens = preprocessed_query.split()
+    query_tokens = [token for token in query_tokens if token]  # Remove empty querytokens
+
     # Search for the query in the titles
     results = []
     for movie in data["movies"]:
@@ -29,8 +33,20 @@ def search(query: str) -> None:
 
         # Title text preprocessing
         preprocessed_movie_title = preprocess_text(movie_title)
+        title_tokens = preprocessed_movie_title.split()
+        title_tokens = [token for token in title_tokens if token]  # Remove empty title tokens
 
-        if preprocessed_query in preprocessed_movie_title:
+        # Check if ANY query token appears in ANY title token
+        found_match = False
+        for query_token in query_tokens:
+            for title_token in title_tokens:
+                if query_token in title_token:
+                    found_match = True 
+                    break  # Exit inner loop
+            if found_match:
+                break  # Exit outer loop
+
+        if found_match:
             results.append(movie)
 
     # Sort the results by id
