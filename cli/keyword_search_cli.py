@@ -1,76 +1,51 @@
 #!/usr/bin/env python3
 
 import argparse
-import json
-import string
-from nltk.stem import PorterStemmer
 
-
-def preprocess_text(text: str) -> str:
-    """Preprocess text by converting to lowercase, stripping whitespace, and removing punctuation."""
-    return text.lower().strip().translate(str.maketrans("", "", string.punctuation))
+from InvertedIndex import InvertedIndex
+from utils.preprocess_text import preprocess_text
 
 
 def search(query: str) -> None:
-    """Load movies and search for query in titles."""
+    """Search using the inverted index."""
 
-    # Load the full JSON object
-    data_path = "data/movies.json"
-    with open(data_path) as f:
-        data = json.load(f)
+    # Load the inverted index
+    try:
+        idx = InvertedIndex()
+        idx.load()
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
+        print("Please run 'build' command first to create the index.")
+        return
 
-    # Query preprocessing
+    # Preprocess and tokenize the query
     original_query = query
     preprocessed_query = preprocess_text(query)
-
-    # Tokenize the query
     query_tokens = preprocessed_query.split()
 
-    # Remove stopwords
-    stopwords_path = "data/stopwords.txt"
-    with open(stopwords_path) as f:
-        stopwords = f.read().splitlines()
+    # Remove empty tokens
+    query_tokens = [token for token in query_tokens if token]
 
-    # Remove empty query tokens
-    query_tokens = [ token for token in query_tokens if token not in stopwords ]
+    # Collect document IDs from ALL tokens
+    result_doc_ids = []
 
-    # Stemming
-    stemmer = PorterStemmer()
-    query_tokens = [ stemmer.stem(token) for token in query_tokens ]
+    # For each token in the query, get matching documents
+    for token in query_tokens:
+        doc_ids = idx.get_documents(token)
 
-    # Search for the query in the titles
-    results = []
-    for movie in data["movies"]:
-        movie_title = movie["title"]
+        # Add document IDs to results (avoid duplicates)
+        for doc_id in doc_ids:
+            if doc_id not in result_doc_ids:
+                result_doc_ids.append(doc_id)
 
-        # Title text preprocessing
-        preprocessed_movie_title = preprocess_text(movie_title)
-        title_tokens = preprocessed_movie_title.split()
-        title_tokens = [
-            token for token in title_tokens if token
-        ]  # Remove empty title tokens
+    # Limit to 5 results AFTER processing all tokens
+    result_doc_ids = result_doc_ids[:5]
 
-        # Check if ANY query token appears in ANY title token
-        found_match = False
-        for query_token in query_tokens:
-            for title_token in title_tokens:
-                if query_token in title_token:
-                    found_match = True
-                    break  # Exit inner loop
-            if found_match:
-                break  # Exit outer loop
-
-        if found_match:
-            results.append(movie)
-
-    # Sort the results by id
-    results.sort(key=lambda x: x["id"])
-    results = results[:5]
-
-    # Print the results
+    # Print results
     print(f"Searching for: {original_query}")
-    for index, movie in enumerate(results, 1):
-        print(f"{index}. {movie['title']}")
+    for i, doc_id in enumerate(result_doc_ids, 1):
+        movie = idx.docmap[doc_id]
+        print(f"{i}. {movie['title']} (ID: {doc_id})")
 
 
 def main() -> None:
@@ -80,12 +55,18 @@ def main() -> None:
     search_parser = subparsers.add_parser("search", help="Search movies using BM25")
     search_parser.add_argument("query", type=str, help="Search query")
 
+    build_parser = subparsers.add_parser("build", help="Build the inverted index")
+
     args = parser.parse_args()
 
     match args.command:
         case "search":
-            # Search for the query using the search function
             search(args.query)
+        case "build":
+            idx = InvertedIndex()
+            idx.build()
+            idx.save()
+
         case _:
             parser.print_help()
 
